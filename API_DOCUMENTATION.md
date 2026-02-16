@@ -188,11 +188,14 @@ curl -X POST http://127.0.0.1:8000/api/job/generate-pdf-from-description \
   - `job_role` (string, optional)
   - `full_name` (string, optional)
   - `model` (string, optional): Gemini model to use.
+  - `generate_cv` (boolean, optional, default: `true`): Whether to generate CV sections.
+  - `generate_email_message` (boolean, optional): When `true`, includes `email_message` in response.
 
 - **Behavior:**
   - If `url` is provided the endpoint runs the Apify extraction and uses the extracted description as input to the AI.
   - If `job_description` is provided it will be used directly.
   - Optional overrides (`company_name`, `job_role`, `full_name`) will be respected when provided and non-placeholder.
+  - When `generate_cv`, `generate_cover_letter`, and/or `generate_email_message` are enabled together, the server performs a single AI request and returns all requested artifacts from one JSON response.
 
 - **Success Response (200):** JSON object with the generated CV data (sections, bullets, suggested `filename`, and metadata). Example (simplified):
 
@@ -203,7 +206,11 @@ curl -X POST http://127.0.0.1:8000/api/job/generate-pdf-from-description \
     {"title":"Professional Summary","content":"..."},
     {"title":"Experience","items":[...]} 
   ],
-  "metadata": {"company_name":"ExampleCorp","job_role":"Senior Backend Engineer"}
+  "metadata": {"company_name":"ExampleCorp","job_role":"Senior Backend Engineer"},
+  "email_message": {
+    "subject": "Application for NodeJs Developer",
+    "body": "Dear Hiring Manager,\n..."
+  }
 }
 ```
 

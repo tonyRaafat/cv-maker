@@ -80,11 +80,117 @@ def _safe_text(value: str) -> str:
     return " ".join(normalized)
 
 
+def _build_education_from_profile(profile_data: dict[str, Any]) -> list[str]:
+    education = profile_data.get("education")
+    if not isinstance(education, dict):
+        return []
+
+    degree = str(education.get("degree") or "").strip()
+    institution = str(education.get("institution") or "").strip()
+    location = str(education.get("location") or "").strip()
+    graduation_date = str(education.get("graduation_date") or "").strip()
+
+    left = " - ".join(part for part in [degree, institution] if part)
+    right = ", ".join(part for part in [location, graduation_date] if part)
+
+    if left and right:
+        return [f"{left} | {right}"]
+    if left:
+        return [left]
+    if right:
+        return [right]
+    return []
+
+
+def _build_training_certifications_from_profile(profile_data: dict[str, Any]) -> list[str]:
+    entries = profile_data.get("training_and_certifications")
+    if not isinstance(entries, list):
+        return []
+
+    formatted: list[str] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        name = str(entry.get("name") or "").strip()
+        provider = str(entry.get("provider") or "").strip()
+        duration = str(entry.get("duration") or "").strip()
+        line = " - ".join(part for part in [name, provider, duration] if part)
+        if line:
+            formatted.append(line)
+    return formatted
+
+
+def _normalize_highlights(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str) and value.strip():
+        return [line.strip() for line in re.split(r"\n+", value) if line.strip()]
+    return []
+
+
+def _build_professional_experience_from_profile(
+    profile_data: dict[str, Any],
+    ai_experiences: Any,
+) -> list[dict[str, Any]]:
+    profile_experiences = profile_data.get("professional_experience")
+    if not isinstance(profile_experiences, list):
+        return []
+
+    ai_list = ai_experiences if isinstance(ai_experiences, list) else []
+    merged: list[dict[str, Any]] = []
+
+    for index, profile_entry in enumerate(profile_experiences):
+        if not isinstance(profile_entry, dict):
+            continue
+
+        title = str(profile_entry.get("title") or "").strip()
+        company = str(profile_entry.get("company") or "").strip()
+        duration = str(profile_entry.get("duration") or "").strip()
+        profile_description = str(profile_entry.get("description") or "").strip()
+
+        ai_entry = ai_list[index] if index < len(ai_list) and isinstance(ai_list[index], dict) else {}
+        highlights = _normalize_highlights(ai_entry.get("highlights"))
+        if not highlights and profile_description:
+            highlights = [profile_description]
+
+        merged.append(
+            {
+                "title": title,
+                "company": company,
+                "duration": duration,
+                "highlights": highlights,
+            }
+        )
+
+    return merged
+
+
+def _postprocess_sections_from_profile(data: dict[str, Any], profile_data: dict[str, Any]) -> dict[str, Any]:
+    for required_key in [
+        "header",
+        "professional_summary",
+        "core_skills",
+        "professional_experience",
+        "personal_projects",
+    ]:
+        if required_key not in data:
+            raise ValueError(f"AI response missing key: {required_key}")
+
+    data["education"] = _build_education_from_profile(profile_data)
+    data["training_certifications"] = _build_training_certifications_from_profile(profile_data)
+    data["professional_experience"] = _build_professional_experience_from_profile(
+        profile_data,
+        data.get("professional_experience"),
+    )
+    return data
+
+
 def build_resume_sections(job_description: str, model_name: str, profile_data: dict[str, Any], prompt_override: str | None = None) -> dict:
     cv_structure = _load_cv_structure_markdown()
     profile_json = json.dumps(profile_data, ensure_ascii=False)
 
     if prompt_override:
+        print("Using custom prompt override for CV generation.")
         prompt = prompt_override
         prompt = prompt.replace("{cv_structure}", cv_structure).replace("{profile_json}", profile_json).replace(
             "{job_description}", job_description
@@ -102,6 +208,8 @@ def build_resume_sections(job_description: str, model_name: str, profile_data: d
             "You are an expert resume writer. Create CV content using BOTH the candidate profile data and job description. "
             "Follow the CV structure and ATS instructions exactly. "
             "Do not invent candidate facts that are not present in profile data. "
+            "Do NOT generate education or training_certifications sections; those are provided separately by the system from profile data. "
+            "For professional_experience, do NOT change title, company, or duration from profile data; only write/refine highlights. "
             "For professional experience and personal projects, write concise impact-focused bullets using action verbs. "
             "Prioritize keywords and responsibilities from the target job description. "
             "If profile projects exist, include the strongest and most relevant ones in personal_projects. "
@@ -121,19 +229,110 @@ def build_resume_sections(job_description: str, model_name: str, profile_data: d
     raw = ask_gemini(prompt, model_name=model_name)
     data = _extract_json(raw)
 
-    for required_key in [
-        "header",
-        "professional_summary",
-        "core_skills",
-        "professional_experience",
-        "personal_projects",
-        "education",
-        "training_certifications",
-    ]:
-        if required_key not in data:
-            raise ValueError(f"AI response missing key: {required_key}")
+    return _postprocess_sections_from_profile(data, profile_data)
 
-    return data
+
+def build_resume_bundle(
+    job_description: str,
+    model_name: str,
+    profile_data: dict[str, Any],
+    *,
+    generate_cv: bool,
+    generate_cover_letter: bool,
+    generate_email_message: bool,
+    full_name: str,
+    role_title: str,
+    company_name: str,
+    prompt_override: str | None = None,
+    cover_letter_prompt: str | None = None,
+    email_message_prompt: str | None = None,
+) -> dict[str, Any]:
+    if not (generate_cv or generate_cover_letter or generate_email_message):
+        return {"sections": {}, "cover_letter": None, "email_message": None}
+
+    cv_structure = _load_cv_structure_markdown()
+    profile_json = json.dumps(profile_data, ensure_ascii=False)
+
+    output_contract = {
+        "sections": "CV sections object following CV schema" if generate_cv else None,
+        "cover_letter": "string" if generate_cover_letter else None,
+        "email_message": {"subject": "Application for <Target Role>", "body": "string"}
+        if generate_email_message
+        else None,
+    }
+
+    prompt_intro = (
+        "You are an expert resume writer. Create requested artifacts from candidate profile data and the job description. "
+        "Do not invent personal facts not present in profile data. "
+        "Education and training_certifications must come only from profile data. "
+        "For professional_experience, never change title/company/duration from profile data; only refine highlights. "
+        "Return ONLY valid JSON matching the exact output contract. "
+        "Do not include markdown fences. "
+    )
+
+    if prompt_override and prompt_override.strip() and generate_cv:
+        prompt_intro += (
+            "Apply the custom CV prompt instruction below for the CV sections portion only; "
+            "still respect the strict output contract and constraints.\n\n"
+            f"Custom CV instruction:\n{prompt_override.strip()}\n\n"
+        )
+
+    cover_instruction = ""
+    if generate_cover_letter:
+        if cover_letter_prompt and cover_letter_prompt.strip():
+            cover_instruction = f"Custom cover letter instruction:\n{cover_letter_prompt.strip()}\n\n"
+        else:
+            cover_instruction = (
+                "Cover letter requirements: professional, ATS-friendly plain text, 3-5 short paragraphs, "
+                "confident concise tone, include measurable impact and a call to action.\n\n"
+            )
+
+    email_instruction = ""
+    if generate_email_message:
+        if email_message_prompt and email_message_prompt.strip():
+            email_instruction = f"Custom email instruction:\n{email_message_prompt.strip()}\n\n"
+        else:
+            email_instruction = (
+                "Email requirements: short professional application email, 5-8 lines max, includes greeting, "
+                "1-2 key strengths, polite closing. email_message.subject should default to 'Application for <Target Role>'.\n\n"
+            )
+
+    prompt = (
+        f"{prompt_intro}"
+        f"Candidate Name: {full_name}\n"
+        f"Target Role: {role_title}\n"
+        f"Company: {company_name}\n\n"
+        f"Output contract JSON shape:\n{json.dumps(output_contract, ensure_ascii=False)}\n\n"
+        f"CV structure instructions (markdown):\n{cv_structure}\n\n"
+        f"{cover_instruction}"
+        f"{email_instruction}"
+        f"Candidate profile data (JSON):\n{profile_json}\n\n"
+        f"Job description:\n{job_description}"
+    )
+
+    raw = ask_gemini(prompt, model_name=model_name)
+    payload = _extract_json(raw)
+
+    sections: dict[str, Any] = {}
+    if generate_cv:
+        candidate_sections = payload.get("sections")
+        if not isinstance(candidate_sections, dict):
+            raise ValueError("AI response missing or invalid 'sections' object.")
+        sections = _postprocess_sections_from_profile(candidate_sections, profile_data)
+
+    cover_letter: str | None = None
+    if generate_cover_letter:
+        cover_letter = str(payload.get("cover_letter") or "").strip() or None
+
+    email_message: Any = None
+    if generate_email_message:
+        email_message = payload.get("email_message")
+
+    return {
+        "sections": sections,
+        "cover_letter": cover_letter,
+        "email_message": email_message,
+    }
 
 
 def _normalize_lines(value: object) -> list[str]:
