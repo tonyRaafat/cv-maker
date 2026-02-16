@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, HttpUrl
 import re
 from typing import Any
@@ -128,6 +129,14 @@ class UserProfileUpdateResponse(BaseModel):
 
 app = FastAPI(title="Gemini API", version="1.0.0")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[],              # keep empty when using regex
+    allow_origin_regex=".*",       # matches any origin
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def _sanitize_filename(value: str) -> str:
     value = re.sub(r'[\\/:*?"<>|]+', "-", value)
