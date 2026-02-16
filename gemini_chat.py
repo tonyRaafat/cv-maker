@@ -16,13 +16,13 @@ def get_api_key() -> str:
     return api_key
 
 
-def ask_gemini(prompt: str, model_name: str = "gemini-2.5-flash-lite") -> str:
+def ask_gemini(prompt: str, model_name: str = "gemini-3-flash-preview") -> str:
     client = genai.Client(api_key=get_api_key())
     response = client.models.generate_content(model=model_name, contents=prompt)
     return (response.text or "").strip()
 
 
-def chat_loop(model_name: str = "gemini-2.5-flash-lite") -> None:
+def chat_loop(model_name: str = "gemini-3-flash-preview") -> None:
     print(f"Gemini chat started with model: {model_name}")
     print("Type 'exit' to quit.\n")
 
@@ -52,7 +52,7 @@ def chat_loop(model_name: str = "gemini-2.5-flash-lite") -> None:
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = argv if argv is not None else sys.argv[1:]
-    model_name = args[0] if args else "gemini-2.5-flash-lite"
+    model_name = args[0] if args else "gemini-3-flash-preview"
 
     try:
         chat_loop(model_name=model_name)

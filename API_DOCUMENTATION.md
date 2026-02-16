@@ -116,7 +116,7 @@ curl -X POST http://127.0.0.1:8000/api/job/extract \
 - **Request Body Schema:**
   - `url` (HttpUrl, required): LinkedIn job URL.
   - `full_name` (string, optional): Name to show in generated PDF. Falls back to profile's `full_name`.
-  - `model` (string, optional): Gemini model used for building sections. Default: `gemini-2.5-flash-lite`.
+  - `model` (string, optional): Gemini model used for building sections. Default: `gemini-3-flash-preview`.
 
 - **Curl Example:**
 
