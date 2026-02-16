@@ -80,28 +80,43 @@ def _safe_text(value: str) -> str:
     return " ".join(normalized)
 
 
-def build_resume_sections(job_description: str, model_name: str, profile_data: dict[str, Any]) -> dict:
+def build_resume_sections(job_description: str, model_name: str, profile_data: dict[str, Any], prompt_override: str | None = None) -> dict:
     cv_structure = _load_cv_structure_markdown()
     profile_json = json.dumps(profile_data, ensure_ascii=False)
-    prompt = (
-        "You are an expert resume writer. Create CV content using BOTH the candidate profile data and job description. "
-        "Follow the CV structure and ATS instructions exactly. "
-        "Do not invent candidate facts that are not present in profile data. "
-        "For professional experience and personal projects, write concise impact-focused bullets using action verbs. "
-        "Prioritize keywords and responsibilities from the target job description. "
-        "If profile projects exist, include the strongest and most relevant ones in personal_projects. "
-        "For each project, include name, tech_stack, and measurable or concrete outcomes when possible. "
-        "Using the same words over and over again in your resume can be perceived as a sign of poor language understanding. "
-        "Instead, use synonyms and active verbs that increase the impact of your achievements. "
-        "Having an error-free resume is key to making a good first impression on the hiring manager. Ensure that your resume is free from spelling and grammatical errors by reading it aloud a few times. "
-        "Any good resume will show the impact you've had in previous positions you've held. "
-        "Quantifying your impact on your resume is the key to building a strong application that will get recruiters to pick up the phone and invite you to an interview. "
-        "Return ONLY valid JSON with the schema defined in the markdown instructions. "
-        "Do not include markdown fences. "
-        f"CV structure instructions (markdown):\n{cv_structure}\n\n"
-        f"Candidate profile data (JSON):\n{profile_json}\n\n"
-        f"Job description:\n{job_description}"
-    )
+
+    if prompt_override:
+        prompt = prompt_override
+        prompt = prompt.replace("{cv_structure}", cv_structure).replace("{profile_json}", profile_json).replace(
+            "{job_description}", job_description
+        )
+        # If the override doesn't include placeholders, append the canonical context so the model has necessary info
+        if all(tok not in prompt_override for tok in ("{cv_structure}", "{profile_json}", "{job_description}")):
+            prompt = (
+                prompt
+                + f"\n\nCV structure instructions (markdown):\n{cv_structure}\n\n"
+                + f"Candidate profile data (JSON):\n{profile_json}\n\n"
+                + f"Job description:\n{job_description}"
+            )
+    else:
+        prompt = (
+            "You are an expert resume writer. Create CV content using BOTH the candidate profile data and job description. "
+            "Follow the CV structure and ATS instructions exactly. "
+            "Do not invent candidate facts that are not present in profile data. "
+            "For professional experience and personal projects, write concise impact-focused bullets using action verbs. "
+            "Prioritize keywords and responsibilities from the target job description. "
+            "If profile projects exist, include the strongest and most relevant ones in personal_projects. "
+            "For each project, include name, tech_stack, and measurable or concrete outcomes when possible. "
+            "Using the same words over and over again in your resume can be perceived as a sign of poor language understanding. "
+            "Instead, use synonyms and active verbs that increase the impact of your achievements. "
+            "Having an error-free resume is key to making a good first impression on the hiring manager. Ensure that your resume is free from spelling and grammatical errors by reading it aloud a few times. "
+            "Any good resume will show the impact you've had in previous positions you've held. "
+            "Quantifying your impact on your resume is the key to building a strong application that will get recruiters to pick up the phone and invite you to an interview. "
+            "Return ONLY valid JSON with the schema defined in the markdown instructions. "
+            "Do not include markdown fences. "
+            f"CV structure instructions (markdown):\n{cv_structure}\n\n"
+            f"Candidate profile data (JSON):\n{profile_json}\n\n"
+            f"Job description:\n{job_description}"
+        )
 
     raw = ask_gemini(prompt, model_name=model_name)
     data = _extract_json(raw)

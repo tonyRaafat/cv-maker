@@ -34,6 +34,7 @@ class JobPdfRequest(BaseModel):
     full_name: str = Field(default="Your Name", description="Name shown in the generated PDF")
     model: str = Field(default="gemini-2.5-flash-lite", description="Gemini model name")
     format: str = Field(default="pdf", description="Output format: 'pdf' or 'docx'")
+    prompt: str | None = Field(default=None, description="Optional custom prompt to send to the AI (overrides built-in prompt)")
 
 
 class JobDescriptionPdfRequest(BaseModel):
@@ -43,6 +44,7 @@ class JobDescriptionPdfRequest(BaseModel):
     full_name: str = Field(default="Your Name", description="Name shown in the generated PDF")
     model: str = Field(default="gemini-2.5-flash-lite", description="Gemini model name")
     format: str = Field(default="pdf", description="Output format: 'pdf' or 'docx'")
+    prompt: str | None = Field(default=None, description="Optional custom prompt to send to the AI (overrides built-in prompt)")
 
 
 class CvGenerateDataRequest(BaseModel):
@@ -52,6 +54,7 @@ class CvGenerateDataRequest(BaseModel):
     job_role: str | None = Field(default=None, description="Optional role title override")
     full_name: str = Field(default="Your Name", description="Name shown in generated CV")
     model: str = Field(default="gemini-2.5-flash-lite", description="Gemini model name")
+    prompt: str | None = Field(default=None, description="Optional custom prompt to send to the AI (overrides built-in prompt)")
 
 
 class CvGenerateDataResponse(BaseModel):
@@ -232,7 +235,9 @@ def generate_job_pdf(request: JobPdfRequest) -> Response:
         if not description:
             raise ValueError("Could not extract job description from Apify response.")
 
-        sections = build_resume_sections(description, model_name=request.model, profile_data=profile)
+        sections = build_resume_sections(
+            description, model_name=request.model, profile_data=profile, prompt_override=request.prompt
+        )
         role_title = extract_job_title(job_data) or profile.get("title") 
         company_name = extract_company_name(job_data) or ""
         full_name = profile.get("full_name") or request.full_name
@@ -283,7 +288,9 @@ def generate_job_pdf_from_description(request: JobDescriptionPdfRequest) -> Resp
             raise ValueError("Profile not found. Please create your profile first using /api/profile.")
 
         description = request.job_description.strip()
-        sections = build_resume_sections(description, model_name=request.model, profile_data=profile)
+        sections = build_resume_sections(
+            description, model_name=request.model, profile_data=profile, prompt_override=request.prompt
+        )
 
         role_title = (request.job_role or "").strip() or profile.get("title") or "Target Role"
         company_name = (request.company_name or "").strip() or ""
@@ -364,7 +371,9 @@ def generate_cv_data(request: CvGenerateDataRequest) -> CvGenerateDataResponse:
             resolved_company = "Target Company"
 
         resolved_full_name = profile.get("full_name") or request.full_name
-        sections = build_resume_sections(description, model_name=request.model, profile_data=profile)
+        sections = build_resume_sections(
+            description, model_name=request.model, profile_data=profile, prompt_override=request.prompt
+        )
 
         return CvGenerateDataResponse(
             full_name=resolved_full_name,
