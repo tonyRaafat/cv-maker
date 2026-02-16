@@ -29,7 +29,14 @@ def _extract_current_job_id(job_url: str) -> str:
 	query_params = parse_qs(parsed.query)
 	values = query_params.get("currentJobId")
 	if not values or not values[0].strip():
-		raise ValueError("The provided URL does not contain a valid currentJobId query parameter.")
+		# Also support URLs like: https://www.linkedin.com/jobs/view/{currentJobId}/
+		path_match = re.search(r"/jobs/view/(\d+)(?:/|$)", parsed.path)
+		if not path_match:
+			raise ValueError(
+				"The provided URL does not contain a valid job ID. Supported formats are "
+				"...?currentJobId=<id> and /jobs/view/<id>/"
+			)
+		return path_match.group(1)
 	return values[0].strip()
 
 

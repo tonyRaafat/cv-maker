@@ -7,6 +7,9 @@ from typing import Any
 from fpdf import FPDF
 
 from gemini_chat import ask_gemini
+from io import BytesIO
+from docx import Document
+from docx.shared import Pt
 
 
 def _load_cv_structure_markdown() -> str:
@@ -156,6 +159,12 @@ def create_pdf_from_template(
     job_url: str,
     sections: dict,
 ) -> bytes:
+    BLUE = (47, 112, 180)
+
+    # Spacing configuration (vertical space in points for PDF)
+    SECTION_SPACING = 6
+    ITEM_SPACING = 2
+
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=12)
     pdf.add_page()
@@ -177,18 +186,25 @@ def create_pdf_from_template(
         pdf.set_draw_color(160, 160, 160)
         pdf.set_line_width(0.4)
         pdf.line(pdf.l_margin, y, pdf.w - pdf.r_margin, y)
-        pdf.ln(4)
+        pdf.ln(SECTION_SPACING)
 
-    def write_line(text: str, h: float = 6, bold: bool = False) -> None:
+    def write_line(text: str, h: float = 6, bold: bool = False, color: tuple[int, int, int] | None = None) -> None:
         pdf.set_x(pdf.l_margin)
+        if color is not None:
+            pdf.set_text_color(*color)
+        else:
+            pdf.set_text_color(0, 0, 0)
+
         if bold:
             pdf.set_font("Helvetica", "B", 11)
             pdf.multi_cell(0, h, _safe_text(text))
+            pdf.set_text_color(0, 0, 0)
             return
         try:
             pdf.multi_cell(0, h, _safe_text(text), markdown=True)
         except TypeError:
             pdf.multi_cell(0, h, _safe_text(text.replace("**", "")))
+        pdf.set_text_color(0, 0, 0)
 
     def normalize_url(raw: str) -> str:
         value = raw.strip()
@@ -249,7 +265,7 @@ def create_pdf_from_template(
         if not lines:
             return
         pdf.set_font("Helvetica", "B", 12)
-        write_line(title, h=8, bold=True)
+        write_line(title, h=8, bold=True, color=BLUE)
         pdf.set_font("Helvetica", "", 11)
         for line in lines:
             emphasized = _emphasize_keywords(line, emphasis_keywords)
@@ -260,14 +276,14 @@ def create_pdf_from_template(
     if summary:
         summary = _remove_years_claims(summary)
         pdf.set_font("Helvetica", "B", 12)
-        write_line("Professional Summary", h=8, bold=True)
+        write_line("Professional Summary", h=8, bold=True, color=BLUE)
         pdf.set_font("Helvetica", "", 11)
         write_line(_emphasize_keywords(summary, emphasis_keywords), h=6)
         draw_divider()
 
     if core_skills:
         pdf.set_font("Helvetica", "B", 12)
-        write_line("Core Skills", h=8, bold=True)
+        write_line("Core Skills", h=8, bold=True, color=BLUE)
         pdf.set_font("Helvetica", "", 11)
 
         skill_groups = [
@@ -286,7 +302,7 @@ def create_pdf_from_template(
     experiences = sections.get("professional_experience")
     if isinstance(experiences, list) and experiences:
         pdf.set_font("Helvetica", "B", 12)
-        write_line("Professional Experience", h=8, bold=True)
+        write_line("Professional Experience", h=8, bold=True, color=BLUE)
         for exp in experiences:
             if not isinstance(exp, dict):
                 continue
@@ -297,7 +313,7 @@ def create_pdf_from_template(
             heading = " ".join(part for part in [title, f"at {company}" if company else ""] if part).strip()
             if heading:
                 pdf.set_font("Helvetica", "B", 11)
-                write_line(heading, h=6, bold=True)
+                write_line(heading, h=6, bold=True, color=BLUE)
             if duration:
                 pdf.set_font("Helvetica", "", 10)
                 write_line(duration, h=5)
@@ -306,13 +322,13 @@ def create_pdf_from_template(
             for line in _normalize_lines(exp.get("highlights")):
                 emphasized = _emphasize_keywords(line, emphasis_keywords)
                 write_line(f"- {emphasized}", h=6)
-            pdf.ln(1)
+            pdf.ln(ITEM_SPACING)
         draw_divider()
 
     projects = sections.get("personal_projects")
     if isinstance(projects, list) and projects:
         pdf.set_font("Helvetica", "B", 12)
-        write_line("Personal Projects", h=8, bold=True)
+        write_line("Personal Projects", h=8, bold=True, color=BLUE)
         for project in projects:
             if not isinstance(project, dict):
                 continue
@@ -322,7 +338,7 @@ def create_pdf_from_template(
 
             if name:
                 pdf.set_font("Helvetica", "B", 11)
-                write_line(name, h=6, bold=True)
+                write_line(name, h=6, bold=True, color=BLUE)
             if tech_stack:
                 pdf.set_font("Helvetica", "", 10)
                 write_line(f"Tech Stack: {', '.join(tech_stack)}", h=5)
@@ -331,7 +347,7 @@ def create_pdf_from_template(
             for line in highlights:
                 emphasized = _emphasize_keywords(line, emphasis_keywords + tech_stack)
                 write_line(f"- {emphasized}", h=6)
-            pdf.ln(1)
+            pdf.ln(ITEM_SPACING)
         draw_divider()
 
     section("Education", _normalize_lines(sections.get("education")))
@@ -344,3 +360,194 @@ def create_pdf_from_template(
         output_path.write_bytes(pdf_bytes)
 
     return pdf_bytes
+
+
+def _write_parsed_runs(paragraph, text: str) -> None:
+    # Simple parser for **bold** markers produced by _emphasize_keywords
+    parts = text.split("**")
+    bold = False
+    for part in parts:
+        run = paragraph.add_run(part)
+        run.bold = bold
+        bold = not bold
+
+
+def create_docx_from_template(
+    output_path: Path | None,
+    full_name: str,
+    role_title: str,
+    company_name: str,
+    job_url: str,
+    sections: dict,
+) -> bytes:
+    doc = Document()
+
+    def _set_spacing(paragraph, before: int = 0, after: int = 6) -> None:
+        try:
+            paragraph.paragraph_format.space_before = Pt(before)
+            paragraph.paragraph_format.space_after = Pt(after)
+        except Exception:
+            pass
+
+    def add_heading(text: str, level: int = 1) -> None:
+        if not text:
+            return
+        h = doc.add_paragraph()
+        run = h.add_run(_safe_text(text))
+        run.bold = True
+        if level == 1:
+            run.font.size = Pt(16)
+        elif level == 2:
+            run.font.size = Pt(12)
+        else:
+            run.font.size = Pt(11)
+        _set_spacing(h, before=2, after=6)
+
+    def add_paragraph_text(text: str, bold: bool = False) -> None:
+        if not text:
+            return
+        p = doc.add_paragraph()
+        if bold:
+            run = p.add_run(_safe_text(text))
+            run.bold = True
+        else:
+            _write_parsed_runs(p, _safe_text(text))
+        _set_spacing(p, before=0, after=4)
+
+    header = sections.get("header", {}) if isinstance(sections.get("header", {}), dict) else {}
+
+    display_name = str(header.get("full_name") or full_name).strip()
+    display_title = str(header.get("job_title") or role_title).strip()
+    display_location = str(header.get("location") or "").strip()
+    display_phone = str(header.get("phone") or "").strip()
+    display_email = str(header.get("email") or "").strip()
+    display_github = str(header.get("github") or "").strip()
+    display_linkedin = str(header.get("linkedin") or "").strip()
+
+    # Header
+    if display_name:
+        h = doc.add_paragraph()
+        r = h.add_run(display_name)
+        r.bold = True
+        r.font.size = Pt(16)
+        _set_spacing(h, before=0, after=4)
+    if display_title:
+        p = doc.add_paragraph(display_title)
+        p.runs[0].font.size = Pt(11)
+        _set_spacing(p, before=0, after=4)
+    contact = " | ".join([p for p in [display_location, display_phone] if p])
+    if contact:
+        p = doc.add_paragraph(contact)
+        _set_spacing(p, before=0, after=4)
+    if display_email:
+        p = doc.add_paragraph(display_email)
+        _set_spacing(p, before=0, after=4)
+    if display_github:
+        p = doc.add_paragraph(f"GitHub: {display_github}")
+        _set_spacing(p, before=0, after=4)
+    if display_linkedin:
+        p = doc.add_paragraph(f"LinkedIn: {display_linkedin}")
+        _set_spacing(p, before=0, after=4)
+
+    # small spacer paragraph
+    p = doc.add_paragraph()
+    _set_spacing(p, before=0, after=6)
+
+    def write_section(title: str, lines: list[str]) -> None:
+        if not lines:
+            return
+        p = doc.add_paragraph(title)
+        p.runs[0].bold = True
+        _set_spacing(p, before=4, after=6)
+        for line in lines:
+            txt = _safe_text(line)
+            p = doc.add_paragraph()
+            _write_parsed_runs(p, f"- {txt}")
+            _set_spacing(p, before=0, after=3)
+
+    # Professional summary
+    summary = str(sections.get("professional_summary", "")).strip()
+    if summary:
+        p = doc.add_paragraph("Professional Summary")
+        p.runs[0].bold = True
+        _set_spacing(p, before=4, after=6)
+        p = doc.add_paragraph()
+        _write_parsed_runs(p, _emphasize_keywords(_remove_years_claims(summary), []))
+        _set_spacing(p, before=0, after=4)
+
+    core_skills = sections.get("core_skills", {}) if isinstance(sections.get("core_skills", {}), dict) else {}
+    if core_skills:
+        p = doc.add_paragraph("Core Skills")
+        p.runs[0].bold = True
+        _set_spacing(p, before=4, after=6)
+        groups = [
+            ("Languages & Frameworks", _normalize_lines(core_skills.get("languages_frameworks"))),
+            ("Databases & Tools", _normalize_lines(core_skills.get("databases_tools"))),
+            ("Testing & DevOps", _normalize_lines(core_skills.get("testing_devops"))),
+            ("Development Practices", _normalize_lines(core_skills.get("development_practices"))),
+        ]
+        for label, vals in groups:
+            if not vals:
+                continue
+            p = doc.add_paragraph()
+            p.add_run(f"{label}: ").bold = True
+            p.add_run(", ".join(vals))
+            _set_spacing(p, before=0, after=3)
+
+    experiences = sections.get("professional_experience")
+    if isinstance(experiences, list) and experiences:
+        doc.add_paragraph("Professional Experience", style="Heading 2")
+        for exp in experiences:
+            if not isinstance(exp, dict):
+                continue
+            title = str(exp.get("title") or "").strip()
+            company = str(exp.get("company") or "").strip()
+            duration = str(exp.get("duration") or "").strip()
+            heading = " ".join(part for part in [title, f"at {company}" if company else ""] if part).strip()
+            if heading:
+                p = doc.add_paragraph(heading)
+                p.runs[0].bold = True
+                _set_spacing(p, before=2, after=2)
+            if duration:
+                p = doc.add_paragraph(duration)
+                _set_spacing(p, before=0, after=2)
+            for line in _normalize_lines(exp.get("highlights")):
+                p = doc.add_paragraph()
+                _write_parsed_runs(p, f"- {line}")
+                _set_spacing(p, before=0, after=2)
+
+    projects = sections.get("personal_projects")
+    if isinstance(projects, list) and projects:
+        doc.add_paragraph("Personal Projects", style="Heading 2")
+        for project in projects:
+            if not isinstance(project, dict):
+                continue
+            name = str(project.get("name") or "").strip()
+            tech_stack = _normalize_lines(project.get("tech_stack"))
+            highlights = _normalize_lines(project.get("highlights"))
+            if name:
+                p = doc.add_paragraph(name)
+                p.runs[0].bold = True
+                _set_spacing(p, before=2, after=2)
+            if tech_stack:
+                p = doc.add_paragraph()
+                p.add_run("Tech Stack: ").bold = True
+                p.add_run(", ".join(tech_stack))
+                _set_spacing(p, before=0, after=2)
+            for line in highlights:
+                p = doc.add_paragraph()
+                _write_parsed_runs(p, f"- {line}")
+                _set_spacing(p, before=0, after=2)
+
+    write_section("Education", _normalize_lines(sections.get("education")))
+    write_section("Training & Certifications", _normalize_lines(sections.get("training_certifications")))
+
+    bio = BytesIO()
+    doc.save(bio)
+    docx_bytes = bio.getvalue()
+
+    if output_path is not None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(docx_bytes)
+
+    return docx_bytes

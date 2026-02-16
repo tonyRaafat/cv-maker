@@ -69,6 +69,11 @@ curl -X POST http://127.0.0.1:8000/api/gemini/chat \
 - **Description:**: Uses Apify helper `fetch_job_data_with_apify` to fetch job data for a given LinkedIn job URL. Returns raw data from Apify.
 - **Request Body Schema:**
   - `url` (string, required): A LinkedIn job `HttpUrl` containing the job identifier (e.g., `currentJobId` query param)
+   - `url` (string, required): A LinkedIn job `HttpUrl` containing the job identifier. Supports either a `currentJobId` query parameter or a path-based job URL like `/jobs/view/{id}/`.
+
+   - **Accepted URL formats:**
+     - `https://www.linkedin.com/jobs/view/{id}/`
+     - `https://www.linkedin.com/jobs/view/{id}/?currentJobId={id}`
 
 - **Request Example:**
 
@@ -168,6 +173,91 @@ curl -X POST http://127.0.0.1:8000/api/job/generate-pdf-from-description \
 - **Errors:**
   - `400` if profile missing or job_description invalid.
   - `500` for other errors.
+
+
+**Two-step CV generation (new APIs)**
+
+**Generate CV Data (AI-only)**
+- **Method:**: POST
+- **Path:**: `/api/cv/generate-data`
+- **Description:**: Sends a job description (or a LinkedIn job `url`) to the AI to generate structured, editable CV data (sections, bullets, summaries) without rendering a file. Use this to preview or edit the AI output before creating a PDF/DOCX to reduce token usage and allow manual edits.
+- **Request Body (one of):**
+  - `url` (HttpUrl, optional): LinkedIn job URL. If provided, the server will fetch the job description via Apify.
+  - `job_description` (string, optional): Raw job description text.
+  - `company_name` (string, optional)
+  - `job_role` (string, optional)
+  - `full_name` (string, optional)
+  - `model` (string, optional): Gemini model to use.
+
+- **Behavior:**
+  - If `url` is provided the endpoint runs the Apify extraction and uses the extracted description as input to the AI.
+  - If `job_description` is provided it will be used directly.
+  - Optional overrides (`company_name`, `job_role`, `full_name`) will be respected when provided and non-placeholder.
+
+- **Success Response (200):** JSON object with the generated CV data (sections, bullets, suggested `filename`, and metadata). Example (simplified):
+
+```json
+{
+  "filename": "Jane_Doe_ExampleCorp_Senior_Backend_Engineer.pdf",
+  "sections": [
+    {"title":"Professional Summary","content":"..."},
+    {"title":"Experience","items":[...]} 
+  ],
+  "metadata": {"company_name":"ExampleCorp","job_role":"Senior Backend Engineer"}
+}
+```
+
+- **Errors:**
+  - `400` if neither `url` nor `job_description` is provided or inputs are invalid.
+  - `500` for AI or extraction failures.
+
+
+**Render CV (from generated data)**
+- **Method:**: POST
+- **Path:**: `/api/cv/render`
+- **Description:**: Accepts the structured CV data produced by `/api/cv/generate-data` (or manually authored data) and renders it to a binary document (PDF or DOCX).
+- **Request Body Schema:**
+  - `data` (object, required): The generated CV object returned by `/api/cv/generate-data`.
+  - `format` (string, optional): `pdf` (default) or `docx`.
+  - `filename` (string, optional): Override for the output filename (extension will be applied according to `format`).
+
+- **Success Response (200):** Binary file attachment with appropriate `Content-Type` and `Content-Disposition` headers. Example header: `Content-Disposition: attachment; filename="<sanitized>.(pdf|docx)"`.
+
+- **Errors:**
+  - `400` if `data` is missing or malformed.
+  - `500` for rendering failures.
+
+
+**Notes on using the two-step flow**
+- Use `/api/cv/generate-data` to get editable, structured AI output and edit it locally or via client UI. Then call `/api/cv/render` to create the final document. This reduces repeated AI calls when making small edits.
+
+
+**Generate Resume PDF from Job URL (unified flow — server-side two-step)**
+- **Method:**: POST
+- **Path:**: `/api/job/generate-pdf`
+- **Description:**: Convenience endpoint that implements the full two-step flow on the server: it fetches job data (when given a LinkedIn `url`), calls the same AI generation used by `/api/cv/generate-data` to produce structured CV data, and then renders that data to a PDF (equivalent to `/api/cv/generate-data` + `/api/cv/render` performed sequentially). Use this if you want a single request that returns a PDF. For finer control or to save tokens, prefer the two-step endpoints.
+- **Request Body Schema:**
+  - `url` (HttpUrl, required when using a LinkedIn link): LinkedIn job URL.
+  - `job_description` (string, optional): If supplied, used directly instead of fetching from Apify.
+  - `company_name` (string, optional)
+  - `job_role` (string, optional)
+  - `full_name` (string, optional)
+  - `model` (string, optional)
+
+- **Curl Example:** (same as before — this endpoint returns a PDF)
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/job/generate-pdf \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://www.linkedin.com/jobs/view/1234567890/"}' \
+  --output resume.pdf
+```
+
+- **Success Response (200):** Binary PDF content with header `Content-Disposition: attachment; filename="<sanitized>.pdf"`.
+
+- **Errors:**
+  - `400` if profile not found or job description cannot be extracted.
+  - `500` for other failures.
 
 
 **Create User Profile**
