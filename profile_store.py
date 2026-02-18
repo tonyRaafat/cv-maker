@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
-from pymongo import MongoClient
+from pymongo import MongoClient, ReturnDocument
 
 
 _client: MongoClient | None = None
@@ -38,7 +38,7 @@ def create_profile(profile_data: dict) -> str:
             "$setOnInsert": {"created_at": payload["created_at"]},
         },
         upsert=True,
-        return_document=True,
+        return_document=ReturnDocument.AFTER,
     )
     if result and "_id" in result:
         return str(result["_id"])
@@ -63,12 +63,18 @@ def get_profile() -> dict | None:
 
 def update_profile(profile_data: dict) -> bool:
     payload = dict(profile_data)
+    payload.pop("_id", None)
+    payload.pop("id", None)
     payload["profile_key"] = PROFILE_KEY
     payload["updated_at"] = datetime.now(timezone.utc)
 
-    result = _get_collection().update_one(
+    result = _get_collection().find_one_and_update(
         {"profile_key": PROFILE_KEY},
-        {"$set": payload},
+        {
+            "$set": payload,
+            "$setOnInsert": {"created_at": datetime.now(timezone.utc)},
+        },
         upsert=True,
+        return_document=ReturnDocument.AFTER,
     )
-    return result.matched_count > 0 or result.upserted_id is not None
+    return result is not None

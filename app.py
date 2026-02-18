@@ -8,7 +8,7 @@ from api.profile import router as profile_router
 from api.health import router as health_router
 
 
-app = FastAPI(title="Gemini API", version="1.0.0")
+app = FastAPI(title="CV Maker API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,

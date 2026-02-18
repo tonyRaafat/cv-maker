@@ -1,12 +1,16 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class ProfileLinks(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     github: str
     linkedin: str
 
 
 class ProfileCoreSkills(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     languages_and_frameworks: list[str] = Field(default_factory=list)
     databases_and_tools: list[str] = Field(default_factory=list)
     testing_and_devops: list[str] = Field(default_factory=list)
@@ -14,6 +18,8 @@ class ProfileCoreSkills(BaseModel):
 
 
 class ProfileExperienceItem(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     title: str
     company: str
     duration: str
@@ -21,6 +27,8 @@ class ProfileExperienceItem(BaseModel):
 
 
 class ProfileEducation(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     degree: str
     institution: str
     location: str
@@ -28,12 +36,16 @@ class ProfileEducation(BaseModel):
 
 
 class ProfileTrainingCertification(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     name: str
     provider: str
     duration: str
 
 
 class UserProfileCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     full_name: str
     title: str
     location: str
