@@ -4,6 +4,22 @@
 - **Purpose:**: Describe each HTTP endpoint exposed by the FastAPI app in `app.py` and show example requests and responses.
 - **Base URL:**: `http://<host>:<port>` (default when running locally with Uvicorn: `http://127.0.0.1:8000`)
 
+**Security (API Key, no login flow)**
+- Protected APIs require an API key header on every request.
+- Configure using environment variables:
+  - `API_KEY`: Long random secret key (required for protected routes).
+  - `API_KEY_HEADER`: Header name to read the key from (optional, default: `X-API-Key`).
+  - `ALLOWED_IPS`: Optional comma-separated client IP allowlist.
+- Public routes: `/health`, `/docs`, `/redoc`, `/openapi.json`.
+- Example:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/profile \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: <your_api_key>" \
+  -d '{"full_name":"Tony","title":"Engineer","location":"Cairo","phone":"000","email":"a@b.com","links":{"github":"x","linkedin":"y"},"professional_summary":"...","core_skills":{},"education":{"degree":"BSc","institution":"X","location":"Y","graduation_date":"2020"}}'
+```
+
 **Endpoints**
 
 **Health Check**
