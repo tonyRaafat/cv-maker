@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from api.cv.schemas import CvGenerateDataRequest, CvRenderRequest, CvGenerateDataResponse
 from .service import generate_cv_data, render_cv
 
@@ -6,9 +6,14 @@ router = APIRouter(prefix="/api/cv")
 
 
 @router.post("/generate-data", response_model=CvGenerateDataResponse)
-def generate_data_route(request: CvGenerateDataRequest):
+def generate_data_route(
+    request: CvGenerateDataRequest,
+    x_gemini_api_key: str | None = Header(default=None, alias="X-Gemini-Api-Key"),
+):
     try:
-        return generate_cv_data(request)
+        effective_key = x_gemini_api_key or request.gemini_api_key
+        request_with_key = request.model_copy(update={"gemini_api_key": effective_key})
+        return generate_cv_data(request_with_key)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:

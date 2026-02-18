@@ -11,6 +11,7 @@ class JobPdfRequest(BaseModel):
     model: str = Field(default="gemini-3-flash-preview", description="Gemini model name")
     format: str = Field(default="pdf", description="Output format: 'pdf' or 'docx'")
     prompt: str | None = Field(default=None, description="Optional custom prompt to send to the AI (overrides built-in prompt)")
+    gemini_api_key: str | None = Field(default=None, description="Optional per-request Gemini API key override")
 
 
 class JobDescriptionPdfRequest(BaseModel):
@@ -21,3 +22,4 @@ class JobDescriptionPdfRequest(BaseModel):
     model: str = Field(default="gemini-3-flash-preview", description="Gemini model name")
     format: str = Field(default="pdf", description="Output format: 'pdf' or 'docx'")
     prompt: str | None = Field(default=None, description="Optional custom prompt to send to the AI (overrides built-in prompt)")
+    gemini_api_key: str | None = Field(default=None, description="Optional per-request Gemini API key override")

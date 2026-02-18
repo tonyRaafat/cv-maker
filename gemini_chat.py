@@ -16,8 +16,13 @@ def get_api_key() -> str:
     return api_key
 
 
-def ask_gemini(prompt: str, model_name: str = "gemini-3-flash-preview") -> str:
-    client = genai.Client(api_key=get_api_key())
+def ask_gemini(
+    prompt: str,
+    model_name: str = "gemini-3-flash-preview",
+    api_key: str | None = None,
+) -> str:
+    resolved_api_key = (api_key or "").strip() or get_api_key()
+    client = genai.Client(api_key=resolved_api_key)
     response = client.models.generate_content(model=model_name, contents=prompt)
     return (response.text or "").strip()
 

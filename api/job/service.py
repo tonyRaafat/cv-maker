@@ -29,7 +29,11 @@ def generate_job_pdf(request: JobPdfRequest) -> Response:
         raise ValueError("Could not extract job description from Apify response.")
 
     sections = build_resume_sections(
-        description, model_name=request.model, profile_data=profile, prompt_override=request.prompt
+        description,
+        model_name=request.model,
+        profile_data=profile,
+        prompt_override=request.prompt,
+        gemini_api_key=request.gemini_api_key,
     )
     role_title = extract_job_title(job_data) or profile.get("title")
     company_name = extract_company_name(job_data) or ""
@@ -52,7 +56,11 @@ def generate_job_pdf_from_description(request: JobDescriptionPdfRequest) -> Resp
 
     description = request.job_description.strip()
     sections = build_resume_sections(
-        description, model_name=request.model, profile_data=profile, prompt_override=request.prompt
+        description,
+        model_name=request.model,
+        profile_data=profile,
+        prompt_override=request.prompt,
+        gemini_api_key=request.gemini_api_key,
     )
 
     role_title = (request.job_role or "").strip() or profile.get("title") or "Target Role"

@@ -185,7 +185,13 @@ def _postprocess_sections_from_profile(data: dict[str, Any], profile_data: dict[
     return data
 
 
-def build_resume_sections(job_description: str, model_name: str, profile_data: dict[str, Any], prompt_override: str | None = None) -> dict:
+def build_resume_sections(
+    job_description: str,
+    model_name: str,
+    profile_data: dict[str, Any],
+    prompt_override: str | None = None,
+    gemini_api_key: str | None = None,
+) -> dict:
     cv_structure = _load_cv_structure_markdown()
     profile_json = json.dumps(profile_data, ensure_ascii=False)
 
@@ -226,7 +232,7 @@ def build_resume_sections(job_description: str, model_name: str, profile_data: d
             f"Job description:\n{job_description}"
         )
 
-    raw = ask_gemini(prompt, model_name=model_name)
+    raw = ask_gemini(prompt, model_name=model_name, api_key=gemini_api_key)
     data = _extract_json(raw)
 
     return _postprocess_sections_from_profile(data, profile_data)
@@ -246,6 +252,7 @@ def build_resume_bundle(
     prompt_override: str | None = None,
     cover_letter_prompt: str | None = None,
     email_message_prompt: str | None = None,
+    gemini_api_key: str | None = None,
 ) -> dict[str, Any]:
     if not (generate_cv or generate_cover_letter or generate_email_message):
         return {"sections": {}, "cover_letter": None, "email_message": None}
@@ -310,7 +317,7 @@ def build_resume_bundle(
         f"Job description:\n{job_description}"
     )
 
-    raw = ask_gemini(prompt, model_name=model_name)
+    raw = ask_gemini(prompt, model_name=model_name, api_key=gemini_api_key)
     payload = _extract_json(raw)
 
     sections: dict[str, Any] = {}

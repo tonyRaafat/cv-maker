@@ -20,6 +20,11 @@ curl -X POST http://127.0.0.1:8000/api/profile \
   -d '{"full_name":"Tony","title":"Engineer","location":"Cairo","phone":"000","email":"a@b.com","links":{"github":"x","linkedin":"y"},"professional_summary":"...","core_skills":{},"education":{"degree":"BSc","institution":"X","location":"Y","graduation_date":"2020"}}'
 ```
 
+**Custom Gemini API key (optional per request)**
+- You can override the server Gemini key for a single request by sending header `X-Gemini-Api-Key`.
+- Supported on AI endpoints: `/api/gemini/chat`, `/api/job/generate-pdf`, `/api/job/generate-pdf-from-description`, `/api/cv/generate-data`.
+- Header takes precedence over request-body `gemini_api_key` field when both are provided.
+
 **Endpoints**
 
 **Health Check**

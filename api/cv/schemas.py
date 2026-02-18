@@ -21,6 +21,7 @@ class CvGenerateDataRequest(BaseModel):
         default=None,
         description="Optional custom prompt for short email generation (used only when generate_email_message=true)",
     )
+    gemini_api_key: str | None = Field(default=None, description="Optional per-request Gemini API key override")
 
 
 class EmailMessageResponse(BaseModel):

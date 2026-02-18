@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from api.job.schemas import JobExtractRequest, JobPdfRequest, JobDescriptionPdfRequest
 from .service import extract_job_data, generate_job_pdf, generate_job_pdf_from_description
 
@@ -16,9 +16,14 @@ def extract_route(request: JobExtractRequest):
 
 
 @router.post("/generate-pdf")
-def generate_pdf_route(request: JobPdfRequest):
+def generate_pdf_route(
+    request: JobPdfRequest,
+    x_gemini_api_key: str | None = Header(default=None, alias="X-Gemini-Api-Key"),
+):
     try:
-        return generate_job_pdf(request)
+        effective_key = x_gemini_api_key or request.gemini_api_key
+        request_with_key = request.model_copy(update={"gemini_api_key": effective_key})
+        return generate_job_pdf(request_with_key)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -26,9 +31,14 @@ def generate_pdf_route(request: JobPdfRequest):
 
 
 @router.post("/generate-pdf-from-description")
-def generate_pdf_from_description_route(request: JobDescriptionPdfRequest):
+def generate_pdf_from_description_route(
+    request: JobDescriptionPdfRequest,
+    x_gemini_api_key: str | None = Header(default=None, alias="X-Gemini-Api-Key"),
+):
     try:
-        return generate_job_pdf_from_description(request)
+        effective_key = x_gemini_api_key or request.gemini_api_key
+        request_with_key = request.model_copy(update={"gemini_api_key": effective_key})
+        return generate_job_pdf_from_description(request_with_key)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:

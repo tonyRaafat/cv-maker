@@ -150,6 +150,7 @@ def generate_cv_data(request: CvGenerateDataRequest) -> CvGenerateDataResponse:
             prompt_override=request.prompt,
             cover_letter_prompt=request.cover_letter_prompt,
             email_message_prompt=request.email_message_prompt,
+            gemini_api_key=request.gemini_api_key,
         )
         sections = bundle.get("sections") or {}
         cover_letter = bundle.get("cover_letter")
@@ -157,7 +158,11 @@ def generate_cv_data(request: CvGenerateDataRequest) -> CvGenerateDataResponse:
             email_message = _normalize_email_message(bundle.get("email_message"), role_title=resolved_role)
     elif request.generate_cv:
         sections = build_resume_sections(
-            description, model_name=request.model, profile_data=profile, prompt_override=request.prompt
+            description,
+            model_name=request.model,
+            profile_data=profile,
+            prompt_override=request.prompt,
+            gemini_api_key=request.gemini_api_key,
         )
 
     return CvGenerateDataResponse(
