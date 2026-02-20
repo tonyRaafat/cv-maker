@@ -1,6 +1,5 @@
 import json
 import re
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -185,6 +184,53 @@ def _postprocess_sections_from_profile(data: dict[str, Any], profile_data: dict[
     return data
 
 
+def _canonical_cv_core(cv_structure: str, profile_json: str, job_description: str) -> str:
+    return (
+        "You are an expert resume writer. Your task is to refine the candidate's CV content using BOTH the profile data and the target job description. "
+        "Focus on enhancing the impact, readability, and ATS compatibility of the resume. "
+        "Important rules to follow:\n"
+        "1. For each professional experience in profile_json, KEEP the job title, company, and duration exactly as they are. "
+        "   Only rewrite/rephrase the 'highlights' or 'description' bullets to be more impactful and results-oriented.\n"
+        "2. For personal projects, keep the project name intact, but refine the description to emphasize measurable results, relevant technologies, and impact. Include tech_stack and concrete outcomes whenever possible.\n"
+        "3. Do NOT invent candidate facts that are not present in profile_json. "
+        "4. Do NOT generate education or training_certifications sections; those are provided separately.\n"
+        "5. Use concise, action-oriented bullets for professional experience and projects. Prefer strong action verbs and varied language. Avoid repeating the same words excessively.\n"
+        "6. Prioritize keywords, responsibilities, and skills from the target job description to make the resume ATS-friendly.\n"
+        "7. Ensure all content is free from spelling or grammatical errors.\n"
+        "8. Quantify achievements wherever possible to demonstrate clear impact.\n"
+        "9. Return ONLY valid JSON following the CV structure defined below; do NOT include markdown fences.\n\n"
+        f"CV structure instructions (markdown):\n{cv_structure}\n\n"
+        f"Candidate profile data (JSON):\n{profile_json}\n\n"
+        f"Target job description:\n{job_description}\n\n"
+        "Your output should be a refined JSON CV where only the descriptions/highlights of jobs and projects are rewritten for impact, "
+        "while all names, titles, companies, project names, and dates remain unchanged."
+    )
+
+
+def _build_cv_prompt(
+    cv_structure: str,
+    profile_json: str,
+    job_description: str,
+    prompt_override: str | None = None,
+) -> str:
+    if not prompt_override or not prompt_override.strip():
+        return _canonical_cv_core(cv_structure, profile_json, job_description)
+
+    override = prompt_override.strip()
+    prompt = (
+        override.replace("{cv_structure}", cv_structure)
+        .replace("{profile_json}", profile_json)
+        .replace("{job_description}", job_description)
+    )
+
+    return (
+        f"{prompt}\n\n"
+        f"CV structure instructions (markdown):\n{cv_structure}\n\n"
+        f"Candidate profile data (JSON):\n{profile_json}\n\n"
+        f"Target job description:\n{job_description}"
+    )
+
+
 def build_resume_sections(
     job_description: str,
     model_name: str,
@@ -195,42 +241,8 @@ def build_resume_sections(
     cv_structure = _load_cv_structure_markdown()
     profile_json = json.dumps(profile_data, ensure_ascii=False)
 
-    if prompt_override:
-        print("Using custom prompt override for CV generation.")
-        prompt = prompt_override
-        prompt = prompt.replace("{cv_structure}", cv_structure).replace("{profile_json}", profile_json).replace(
-            "{job_description}", job_description
-        )
-        # If the override doesn't include placeholders, append the canonical context so the model has necessary info
-        if all(tok not in prompt_override for tok in ("{cv_structure}", "{profile_json}", "{job_description}")):
-            prompt = (
-                prompt
-                + f"\n\nCV structure instructions (markdown):\n{cv_structure}\n\n"
-                + f"Candidate profile data (JSON):\n{profile_json}\n\n"
-                + f"Job description:\n{job_description}"
-            )
-    else:
-        prompt = (
-            "You are an expert resume writer. Create CV content using BOTH the candidate profile data and job description. "
-            "Follow the CV structure and ATS instructions exactly. "
-            "Do not invent candidate facts that are not present in profile data. "
-            "Do NOT generate education or training_certifications sections; those are provided separately by the system from profile data. "
-            "For professional_experience, do NOT change title, company, or duration from profile data; only write/refine highlights. "
-            "For professional experience and personal projects, write concise impact-focused bullets using action verbs. "
-            "Prioritize keywords and responsibilities from the target job description. "
-            "If profile projects exist, include the strongest and most relevant ones in personal_projects. "
-            "For each project, include name, tech_stack, and measurable or concrete outcomes when possible. "
-            "Using the same words over and over again in your resume can be perceived as a sign of poor language understanding. "
-            "Instead, use synonyms and active verbs that increase the impact of your achievements. "
-            "Having an error-free resume is key to making a good first impression on the hiring manager. Ensure that your resume is free from spelling and grammatical errors by reading it aloud a few times. "
-            "Any good resume will show the impact you've had in previous positions you've held. "
-            "Quantifying your impact on your resume is the key to building a strong application that will get recruiters to pick up the phone and invite you to an interview. "
-            "Return ONLY valid JSON with the schema defined in the markdown instructions. "
-            "Do not include markdown fences. "
-            f"CV structure instructions (markdown):\n{cv_structure}\n\n"
-            f"Candidate profile data (JSON):\n{profile_json}\n\n"
-            f"Job description:\n{job_description}"
-        )
+    prompt = _build_cv_prompt(cv_structure, profile_json, job_description, prompt_override)
+
 
     raw = ask_gemini(prompt, model_name=model_name, api_key=gemini_api_key)
     data = _extract_json(raw)
@@ -268,21 +280,12 @@ def build_resume_bundle(
         else None,
     }
 
-    prompt_intro = (
-        "You are an expert resume writer. Create requested artifacts from candidate profile data and the job description. "
-        "Do not invent personal facts not present in profile data. "
-        "Education and training_certifications must come only from profile data. "
-        "For professional_experience, never change title/company/duration from profile data; only refine highlights. "
-        "Return ONLY valid JSON matching the exact output contract. "
-        "Do not include markdown fences. "
+    prompt_core = _build_cv_prompt(
+        cv_structure,
+        profile_json,
+        job_description,
+        prompt_override if generate_cv else None,
     )
-
-    if prompt_override and prompt_override.strip() and generate_cv:
-        prompt_intro += (
-            "Apply the custom CV prompt instruction below for the CV sections portion only; "
-            "still respect the strict output contract and constraints.\n\n"
-            f"Custom CV instruction:\n{prompt_override.strip()}\n\n"
-        )
 
     cover_instruction = ""
     if generate_cover_letter:
@@ -305,16 +308,13 @@ def build_resume_bundle(
             )
 
     prompt = (
-        f"{prompt_intro}"
+        f"{prompt_core}\n\n"
+        f"{cover_instruction}"
+        f"{email_instruction}"
         f"Candidate Name: {full_name}\n"
         f"Target Role: {role_title}\n"
         f"Company: {company_name}\n\n"
         f"Output contract JSON shape:\n{json.dumps(output_contract, ensure_ascii=False)}\n\n"
-        f"CV structure instructions (markdown):\n{cv_structure}\n\n"
-        f"{cover_instruction}"
-        f"{email_instruction}"
-        f"Candidate profile data (JSON):\n{profile_json}\n\n"
-        f"Job description:\n{job_description}"
     )
 
     raw = ask_gemini(prompt, model_name=model_name, api_key=gemini_api_key)
