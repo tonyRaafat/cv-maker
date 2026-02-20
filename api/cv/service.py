@@ -1,4 +1,5 @@
 import json
+import logging
 from fastapi.responses import Response
 
 from api.cv.schemas import CvGenerateDataRequest, CvGenerateDataResponse, CvRenderRequest, EmailMessageResponse
@@ -11,6 +12,8 @@ from job_extractor import (
 from resume_pdf_service import build_resume_sections, build_resume_bundle
 from profile_store import get_profile
 from utils import render_cv_response, _clean_optional_text
+
+logger = logging.getLogger(__name__)
 
 
 def _default_cover_letter_prompt(*, full_name: str, role_title: str, company_name: str, job_description: str, sections: dict) -> str:
@@ -102,6 +105,8 @@ def generate_cv_data(request: CvGenerateDataRequest) -> CvGenerateDataResponse:
     if not profile:
         raise ValueError("Profile not found. Please create your profile first using /api/profile.")
 
+    logger.info("generate_cv_data called model=%s generate_cv=%s generate_cover_letter=%s generate_email_message=%s url_provided=%s", request.model, request.generate_cv, request.generate_cover_letter, request.generate_email_message, bool(request.url))
+
     has_url = bool(request.url)
     has_description = bool(request.job_description and request.job_description.strip())
     if not has_url and not has_description:
@@ -152,6 +157,7 @@ def generate_cv_data(request: CvGenerateDataRequest) -> CvGenerateDataResponse:
             email_message_prompt=request.email_message_prompt,
             gemini_api_key=request.gemini_api_key,
         )
+        logger.info("Received bundle: sections_present=%s cover_letter_present=%s email_message_present=%s", bool(bundle.get("sections")), bool(bundle.get("cover_letter")), bool(bundle.get("email_message")))
         sections = bundle.get("sections") or {}
         cover_letter = bundle.get("cover_letter")
         if request.generate_email_message:
@@ -164,6 +170,7 @@ def generate_cv_data(request: CvGenerateDataRequest) -> CvGenerateDataResponse:
             prompt_override=request.prompt,
             gemini_api_key=request.gemini_api_key,
         )
+        logger.info("Generated sections keys=%s", list(sections.keys()))
 
     return CvGenerateDataResponse(
         full_name=resolved_full_name,

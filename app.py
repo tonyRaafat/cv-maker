@@ -1,3 +1,4 @@
+import logging
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -8,6 +9,11 @@ from api.profile import router as profile_router
 from api.health import router as health_router
 from api.security import verify_api_access
 
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 
 app = FastAPI(
     title="CV Maker API",

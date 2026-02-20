@@ -1,9 +1,12 @@
+import logging
 import os
 import sys
 from typing import Optional
 
 from dotenv import load_dotenv
 from google import genai
+
+logger = logging.getLogger(__name__)
 
 
 def get_api_key() -> str:
@@ -22,9 +25,20 @@ def ask_gemini(
     api_key: str | None = None,
 ) -> str:
     resolved_api_key = (api_key or "").strip() or get_api_key()
-    client = genai.Client(api_key=resolved_api_key)
-    response = client.models.generate_content(model=model_name, contents=prompt)
-    return (response.text or "").strip()
+    try:
+        logger.info("Calling Gemini model=%s prompt_len=%d api_key_provided=%s", model_name, len(prompt or ""), bool(api_key))
+        preview = (prompt or "")[:1000]
+        logger.debug("Prompt preview: %s", preview)
+
+        client = genai.Client(api_key=resolved_api_key)
+        response = client.models.generate_content(model=model_name, contents=prompt)
+        text = (response.text or "").strip()
+        logger.info("Gemini response received model=%s resp_len=%d", model_name, len(text))
+        logger.debug("Response preview: %s", (text or "")[:1000])
+        return text
+    except Exception as exc:
+        logger.exception("Gemini request failed for model=%s", model_name)
+        raise
 
 
 def chat_loop(model_name: str = "gemini-3-flash-preview") -> None:

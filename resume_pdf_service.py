@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,8 @@ from gemini_chat import ask_gemini
 from io import BytesIO
 from docx import Document
 from docx.shared import Pt
+
+logger = logging.getLogger(__name__)
 
 
 def _load_cv_structure_markdown() -> str:
@@ -23,9 +26,11 @@ def _extract_json(text: str) -> dict:
     try:
         return json.loads(text)
     except Exception:
+        logger.exception("JSON parse failed, attempting to extract JSON substring")
         start = text.find("{")
         end = text.rfind("}")
         if start == -1 or end == -1 or end <= start:
+            logger.error("AI response did not contain valid JSON: %s", (text or "")[:1000])
             raise ValueError("AI response did not contain valid JSON.")
         snippet = text[start : end + 1]
         return json.loads(snippet)
@@ -242,10 +247,15 @@ def build_resume_sections(
     profile_json = json.dumps(profile_data, ensure_ascii=False)
 
     prompt = _build_cv_prompt(cv_structure, profile_json, job_description, prompt_override)
-
-
-    raw = ask_gemini(prompt, model_name=model_name, api_key=gemini_api_key)
-    data = _extract_json(raw)
+    try:
+        logger.info("Building resume sections using model=%s", model_name)
+        logger.debug("Prompt preview: %s", (prompt or "")[:1000])
+        raw = ask_gemini(prompt, model_name=model_name, api_key=gemini_api_key)
+        logger.debug("Raw AI response preview: %s", (raw or "")[:1000])
+        data = _extract_json(raw)
+    except Exception:
+        logger.exception("Failed to build resume sections using model=%s", model_name)
+        raise
 
     return _postprocess_sections_from_profile(data, profile_data)
 
@@ -287,6 +297,9 @@ def build_resume_bundle(
         prompt_override if generate_cv else None,
     )
 
+    logger.info("Building resume bundle model=%s generate_cv=%s generate_cover_letter=%s generate_email_message=%s", model_name, generate_cv, generate_cover_letter, generate_email_message)
+    logger.debug("Prompt core preview: %s", (prompt_core or "")[:1000])
+
     cover_instruction = ""
     if generate_cover_letter:
         if cover_letter_prompt and cover_letter_prompt.strip():
@@ -317,8 +330,15 @@ def build_resume_bundle(
         f"Output contract JSON shape:\n{json.dumps(output_contract, ensure_ascii=False)}\n\n"
     )
 
-    raw = ask_gemini(prompt, model_name=model_name, api_key=gemini_api_key)
-    payload = _extract_json(raw)
+    try:
+        logger.info("Sending bundle prompt to model=%s", model_name)
+        logger.debug("Bundle prompt preview: %s", (prompt or "")[:1000])
+        raw = ask_gemini(prompt, model_name=model_name, api_key=gemini_api_key)
+        logger.debug("Raw bundle AI response preview: %s", (raw or "")[:1000])
+        payload = _extract_json(raw)
+    except Exception:
+        logger.exception("Failed to build resume bundle using model=%s", model_name)
+        raise
 
     sections: dict[str, Any] = {}
     if generate_cv:

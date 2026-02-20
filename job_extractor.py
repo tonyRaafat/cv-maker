@@ -1,9 +1,12 @@
+import logging
 import os
 import re
 from urllib.parse import parse_qs, urlparse
 
 import httpx
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 
 APIFY_ACTOR = "apimaestro~linkedin-job-detail"
@@ -57,18 +60,27 @@ def fetch_job_data_with_apify(job_url: str, timeout_seconds: float = 60.0) -> di
 	run_sync_url = f"{APIFY_BASE_URL}/acts/{APIFY_ACTOR}/run-sync-get-dataset-items"
 	payload = {"job_id": [current_job_id]}
 
-	with httpx.Client(timeout=timeout_seconds, follow_redirects=True) as client:
-		resp = client.post(
-			run_sync_url,
-			params={"token": token},
-			json=payload,
-			headers={"Content-Type": "application/json"},
-		)
+	logger.info("Apify request run_sync_url=%s current_job_id=%s", run_sync_url, current_job_id)
+	try:
+		with httpx.Client(timeout=timeout_seconds, follow_redirects=True) as client:
+			resp = client.post(
+				run_sync_url,
+				params={"token": token},
+				json=payload,
+				headers={"Content-Type": "application/json"},
+			)
 
-		if resp.status_code >= 400:
-			raise RuntimeError(f"Apify run-sync request failed: HTTP {resp.status_code} - {resp.text[:500]}")
+			logger.info("Apify HTTP %s returned status=%d", run_sync_url, resp.status_code)
 
-		items = resp.json()
+			if resp.status_code >= 400:
+				logger.error("Apify error response: %s", resp.text[:1000])
+				raise RuntimeError(f"Apify run-sync request failed: HTTP {resp.status_code} - {resp.text[:500]}")
+
+			items = resp.json()
+			logger.info("Apify returned items_count=%d", len(items) if isinstance(items, list) else 0)
+	except Exception:
+		logger.exception("Apify request failed for job_url=%s", job_url)
+		raise
 		if not isinstance(items, list):
 			# Some actors may return an object with `items` key or similar; handle common cases
 			if isinstance(items, dict) and "items" in items and isinstance(items["items"], list):
