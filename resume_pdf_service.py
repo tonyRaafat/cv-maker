@@ -863,17 +863,20 @@ def create_cover_letter_pdf(output_path: Path | None, full_name: str, role_title
     pdf.set_auto_page_break(auto=True, margin=12)
     pdf.add_page()
 
+    # Compute usable width explicitly to avoid FPDF errors when width=0 interacts badly with fonts/margins
+    usable_width = max(1, int(pdf.w - pdf.l_margin - pdf.r_margin))
+
     pdf.set_font("Helvetica", "B", 16)
-    header = "".join([part for part in [full_name, f" — {role_title}" if role_title else None] if part])
+    header = "".join([part for part in [full_name, f" - {role_title}" if role_title else None] if part])
     if header:
-        pdf.multi_cell(0, 8, _safe_text(header))
+        pdf.multi_cell(usable_width, 8, _safe_text(header))
         pdf.ln(2)
 
     pdf.set_font("Helvetica", "", 11)
     if company_name:
-        pdf.multi_cell(0, 6, f"Company: { _safe_text(company_name) }")
+        pdf.multi_cell(usable_width, 6, _safe_text(f"Company: {company_name}"))
     if job_url:
-        pdf.multi_cell(0, 6, _safe_text(job_url))
+        pdf.multi_cell(usable_width, 6, _safe_text(job_url))
     if company_name or job_url:
         pdf.ln(4)
 
@@ -881,10 +884,8 @@ def create_cover_letter_pdf(output_path: Path | None, full_name: str, role_title
     if body:
         paras = [line.strip() for line in re.split(r"\n{2,}", body) if line.strip()]
         for para in paras:
-            try:
-                pdf.multi_cell(0, 6, _safe_text(para))
-            except TypeError:
-                pdf.multi_cell(0, 6, _safe_text(para.replace("**", "")))
+            text = _safe_text(para.replace("**", ""))
+            pdf.multi_cell(usable_width, 6, text)
             pdf.ln(3)
 
     pdf_bytes = bytes(pdf.output())
