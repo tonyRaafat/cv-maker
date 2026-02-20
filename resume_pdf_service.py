@@ -806,3 +806,90 @@ def create_docx_from_template(
         output_path.write_bytes(docx_bytes)
 
     return docx_bytes
+
+
+def create_cover_letter_docx(output_path: Path | None, full_name: str, role_title: str, company_name: str, job_url: str, cover_letter_text: str) -> bytes:
+    doc = Document()
+
+    def _set_spacing(paragraph, before: int = 0, after: int = 6) -> None:
+        try:
+            paragraph.paragraph_format.space_before = Pt(before)
+            paragraph.paragraph_format.space_after = Pt(after)
+        except Exception:
+            pass
+
+    # Header
+    header_text = ""
+    if full_name:
+        header_text += full_name
+    if role_title:
+        header_text += f" — {role_title}"
+    if header_text:
+        p = doc.add_paragraph()
+        r = p.add_run(_safe_text(header_text))
+        r.bold = True
+        r.font.size = Pt(14)
+        _set_spacing(p, before=0, after=6)
+
+    if company_name:
+        p = doc.add_paragraph(f"Company: {company_name}")
+        _set_spacing(p, before=0, after=4)
+    if job_url:
+        p = doc.add_paragraph(job_url)
+        _set_spacing(p, before=0, after=6)
+
+    # Body
+    body = str(cover_letter_text or "").strip()
+    if body:
+        # Preserve paragraphs
+        paras = [line.strip() for line in re.split(r"\n{2,}", body) if line.strip()]
+        for para in paras:
+            p = doc.add_paragraph(_safe_text(para))
+            _set_spacing(p, before=0, after=6)
+
+    bio = BytesIO()
+    doc.save(bio)
+    docx_bytes = bio.getvalue()
+
+    if output_path is not None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(docx_bytes)
+
+    return docx_bytes
+
+
+def create_cover_letter_pdf(output_path: Path | None, full_name: str, role_title: str, company_name: str, job_url: str, cover_letter_text: str) -> bytes:
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=12)
+    pdf.add_page()
+
+    pdf.set_font("Helvetica", "B", 16)
+    header = "".join([part for part in [full_name, f" — {role_title}" if role_title else None] if part])
+    if header:
+        pdf.multi_cell(0, 8, _safe_text(header))
+        pdf.ln(2)
+
+    pdf.set_font("Helvetica", "", 11)
+    if company_name:
+        pdf.multi_cell(0, 6, f"Company: { _safe_text(company_name) }")
+    if job_url:
+        pdf.multi_cell(0, 6, _safe_text(job_url))
+    if company_name or job_url:
+        pdf.ln(4)
+
+    body = str(cover_letter_text or "").strip()
+    if body:
+        paras = [line.strip() for line in re.split(r"\n{2,}", body) if line.strip()]
+        for para in paras:
+            try:
+                pdf.multi_cell(0, 6, _safe_text(para))
+            except TypeError:
+                pdf.multi_cell(0, 6, _safe_text(para.replace("**", "")))
+            pdf.ln(3)
+
+    pdf_bytes = bytes(pdf.output())
+    if output_path is not None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(pdf_bytes)
+
+    return pdf_bytes

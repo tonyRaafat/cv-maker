@@ -2,7 +2,13 @@ import json
 import logging
 from fastapi.responses import Response
 
-from api.cv.schemas import CvGenerateDataRequest, CvGenerateDataResponse, CvRenderRequest, EmailMessageResponse
+from api.cv.schemas import (
+    CvGenerateDataRequest,
+    CvGenerateDataResponse,
+    CvRenderRequest,
+    EmailMessageResponse,
+    CoverLetterRenderRequest,
+)
 from job_extractor import (
     extract_company_name,
     extract_job_description,
@@ -11,7 +17,7 @@ from job_extractor import (
 )
 from resume_pdf_service import build_resume_sections, build_resume_bundle
 from profile_store import get_profile
-from utils import render_cv_response, _clean_optional_text
+from utils import render_cv_response, render_cover_letter_response, _clean_optional_text
 
 logger = logging.getLogger(__name__)
 
@@ -190,5 +196,16 @@ def render_cv(request: CvRenderRequest) -> Response:
         company_name=request.company_name,
         source=request.source,
         sections=request.sections,
+        output_format=request.format,
+    )
+
+
+def render_cover_letter(request: CoverLetterRenderRequest) -> Response:
+    return render_cover_letter_response(
+        full_name=request.full_name,
+        role_title=request.role_title,
+        company_name=request.company_name,
+        source=request.source,
+        cover_letter=request.cover_letter,
         output_format=request.format,
     )

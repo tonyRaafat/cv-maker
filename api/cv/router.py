@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Header, HTTPException
-from api.cv.schemas import CvGenerateDataRequest, CvRenderRequest, CvGenerateDataResponse
-from .service import generate_cv_data, render_cv
+from api.cv.schemas import CvGenerateDataRequest, CvRenderRequest, CvGenerateDataResponse, CoverLetterRenderRequest
+from .service import generate_cv_data, render_cv, render_cover_letter
 
 router = APIRouter(prefix="/api/cv")
 
@@ -26,3 +26,11 @@ def render_route(request: CvRenderRequest):
         return render_cv(request)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to render CV: {exc}") from exc
+
+
+@router.post("/render-cover-letter")
+def render_cover_letter_route(request: CoverLetterRenderRequest):
+    try:
+        return render_cover_letter(request)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to render cover letter: {exc}") from exc

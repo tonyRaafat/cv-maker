@@ -46,3 +46,12 @@ class CvRenderRequest(BaseModel):
     source: str = Field(default="manual-job-description")
     format: str = Field(default="pdf", description="Output format: 'pdf' or 'docx'")
     sections: dict[str, Any]
+
+
+class CoverLetterRenderRequest(BaseModel):
+    full_name: str
+    company_name: str
+    role_title: str
+    source: str = Field(default="manual-job-description")
+    format: str = Field(default="pdf", description="Output format: 'pdf' or 'docx'")
+    cover_letter: str
