@@ -147,15 +147,24 @@ def _build_professional_experience_from_profile(
         if not isinstance(profile_entry, dict):
             continue
 
-        title = str(profile_entry.get("title") or "").strip()
-        company = str(profile_entry.get("company") or "").strip()
-        duration = str(profile_entry.get("duration") or "").strip()
+        profile_title = str(profile_entry.get("title") or "").strip()
+        profile_company = str(profile_entry.get("company") or "").strip()
+        profile_duration = str(profile_entry.get("duration") or "").strip()
         profile_description = str(profile_entry.get("description") or "").strip()
 
         ai_entry = ai_list[index] if index < len(ai_list) and isinstance(ai_list[index], dict) else {}
+        # Allow the AI to provide corrected/normalized title/company/duration when it can do so confidently.
+        ai_title = str(ai_entry.get("title") or "").strip()
+        ai_company = str(ai_entry.get("company") or "").strip()
+        ai_duration = str(ai_entry.get("duration") or "").strip()
+
         highlights = _normalize_highlights(ai_entry.get("highlights"))
         if not highlights and profile_description:
             highlights = [profile_description]
+
+        title = ai_title or profile_title
+        company = ai_company or profile_company
+        duration = ai_duration or profile_duration
 
         merged.append(
             {
@@ -194,8 +203,8 @@ def _canonical_cv_core(cv_structure: str, profile_json: str, job_description: st
         "You are an expert resume writer. Your task is to refine the candidate's CV content using BOTH the profile data and the target job description. "
         "Focus on enhancing the impact, readability, and ATS compatibility of the resume. "
         "Important rules to follow:\n"
-        "1. For each professional experience in profile_json, KEEP the job title, company, and duration exactly as they are. "
-        "   Only rewrite/rephrase the 'highlights' or 'description' bullets to be more impactful and results-oriented.\n"
+        "1. For each professional experience in profile_json, prefer the job title, company, and duration from the profile data, but it's acceptable to correct minor typos, normalize formatting, or fill missing fields when the information can be confidently inferred. "
+        "   Do NOT invent new employers or fabricate dates; if the information is uncertain, preserve the original profile value. Only rewrite/rephrase the 'highlights' or 'description' bullets to be more impactful and results-oriented.\n"
         "2. For personal projects, keep the project name intact, but refine the description to emphasize measurable results, relevant technologies, and impact. Include tech_stack and concrete outcomes whenever possible.\n"
         "3. Do NOT invent candidate facts that are not present in profile_json. "
         "4. Do NOT generate education or training_certifications sections; those are provided separately.\n"
